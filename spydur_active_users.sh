@@ -2,6 +2,12 @@
 # active_users.sh - Find active users with date range support
 # Usage: ./active_users.sh [START_DATE] [END_DATE]
 # Example: ./active_users.sh 2024-09-01 2024-11-01
+#
+# Set DEBUG=1 to see detailed error messages:
+#   DEBUG=1 ./active_users.sh 2024-09-01 2024-11-01
+
+# Debug mode
+DEBUG="${DEBUG:-0}"
 
 # Default to last 3 months if no dates provided
 START_DATE="${1:-$(date -d '3 months ago' +%Y-%m-%d)}"
@@ -93,13 +99,15 @@ for homedir in /home/*; do
     # OPTIMIZATION: Stop as soon as we find ANY file in the date range
     # Use -print -quit to stop immediately after finding first match
     found_file=$(sudo -n -u "$username" bash -c "find -L '$homedir' -type f -newermt '$START_DATE' ! -newermt '$END_DATE 23:59:59' \
-                  -print -quit 2>/dev/null" 2>/dev/null)
+                  -print -quit 2>/dev/null" 2>&1)
+    sudo_exit=$?
     
-    # Check sudo exit code
-    if [ $? -eq 1 ]; then
-        # Password required, skip this user
+    # Check sudo exit code (1 = password required, other non-zero = other error)
+    if [ $sudo_exit -ne 0 ]; then
+        # Some error occurred
         ((password_required++))
         password_required_users+=("$username")
+        [ $DEBUG -eq 1 ] && echo "   DEBUG: User $username failed with exit code $sudo_exit: $found_file"
         continue
     fi
     
@@ -113,7 +121,7 @@ for homedir in /home/*; do
 done
 echo "   Checked: $checked, Skipped: $skipped already active, Password-required: $password_required, Total active: ${#active_users[@]}"
 if [ ${#password_required_users[@]} -gt 0 ]; then
-    echo "   First 10 users requiring password:"
+    echo "   First 10 users with sudo errors (run with DEBUG=1 for details):"
     printf '   %s\n' "${password_required_users[@]}" | head -10
 fi
 
@@ -139,13 +147,15 @@ for scratchdir in /scratch/*; do
     # OPTIMIZATION: Stop as soon as we find ANY file in the date range
     # Use -print -quit to stop immediately after finding first match
     found_file=$(sudo -n -u "$username" bash -c "find -L '$scratchdir' -type f -newermt '$START_DATE' ! -newermt '$END_DATE 23:59:59' \
-                  -print -quit 2>/dev/null" 2>/dev/null)
+                  -print -quit 2>/dev/null" 2>&1)
+    sudo_exit=$?
     
-    # Check sudo exit code
-    if [ $? -eq 1 ]; then
-        # Password required, skip this user
+    # Check sudo exit code (1 = password required, other non-zero = other error)
+    if [ $sudo_exit -ne 0 ]; then
+        # Some error occurred
         ((password_required++))
         scratch_password_required_users+=("$username")
+        [ $DEBUG -eq 1 ] && echo "   DEBUG: User $username failed with exit code $sudo_exit: $found_file"
         continue
     fi
     
@@ -159,7 +169,7 @@ for scratchdir in /scratch/*; do
 done
 echo "   Checked: $checked, Skipped: $skipped already active, Password-required: $password_required"
 if [ ${#scratch_password_required_users[@]} -gt 0 ]; then
-    echo "   First 10 users requiring password:"
+    echo "   First 10 users with sudo errors (run with DEBUG=1 for details):"
     printf '   %s\n' "${scratch_password_required_users[@]}" | head -10
 fi
 
@@ -173,7 +183,8 @@ if [ ${#password_required_users[@]} -gt 0 ] || [ ${#scratch_password_required_us
     > /tmp/spydur_password_required_users.txt
     printf '%s\n' "${password_required_users[@]}" "${scratch_password_required_users[@]}" | sort -u > /tmp/spydur_password_required_users.txt
     unique_count=$(wc -l < /tmp/spydur_password_required_users.txt)
-    echo "Password-required users: $unique_count (saved to /tmp/spydur_password_required_users.txt)"
+    echo "Users with sudo errors: $unique_count (saved to /tmp/spydur_password_required_users.txt)"
+    echo "Run with DEBUG=1 to see error details"
     echo ""
 fi
 
