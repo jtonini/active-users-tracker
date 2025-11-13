@@ -7,46 +7,75 @@
 START_DATE="${1:-$(date -d '3 months ago' +%Y-%m-%d)}"
 END_DATE="${2:-$(date +%Y-%m-%d)}"
 
-echo "spiderweb: Finding active users between $START_DATE and $END_DATE"
+# Calculate days ago for -mtime (from today to START_DATE)
+DAYS_AGO=$(( ($(date +%s) - $(date -d "$START_DATE" +%s)) / 86400 ))
+
+echo "spiderweb: Finding active users since $START_DATE ($DAYS_AGO days ago)"
 echo "===================================================================="
+echo ""
 
-# Temporary file for results
-TEMP_FILE="/tmp/active_users_quick_$$.txt"
-> "$TEMP_FILE"
+# Associative array to track active users
+declare -A active_users
+declare -A user_last_activity
 
-# Counter for progress
+# Counters
 checked=0
-found=0
+skipped=0
+active_count=0
 
-# Get real users and check for recent files in date range
-getent passwd | awk -F: '$3 >= 1000 && $3 != 65534 {print $1":"$6}' | while IFS=: read user home; do
-    [ ! -d "$home" ] && continue
+# Check each directory in /home
+for homedir in /home/*; do
+    [ ! -d "$homedir" ] && continue
+    username=$(basename "$homedir")
+    
+    # Skip lost+found
+    [[ "$username" == "lost+found" ]] && continue
+    
     ((checked++))
     
-    # Progress indicator every 10 users
-    [ $((checked % 10)) -eq 0 ] && echo "   ...checked $checked users, found $found active" >&2
+    # Progress every 50 users
+    if [ $((checked % 50)) -eq 0 ]; then
+        echo "  Progress: $checked checked, $active_count active, $skipped skipped"
+    fi
     
-    # Find most recent file in date range (limit depth for performance)
-    # Use -L to follow symlinks (faculty may share files via symlinks)
-    # Use maxdepth 5 to avoid very deep searches, redirect errors
-    recent_file=$(find -L "$home" -maxdepth 5 -type f -newermt "$START_DATE" ! -newermt "$END_DATE 23:59:59" \
+    # Check if user exists
+    if ! id "$username" &>/dev/null; then
+        ((skipped++))
+        continue
+    fi
+    
+    # Find most recent file since START_DATE (using -mtime for better performance)
+    # Use timeout to avoid hanging on problematic directories
+    recent_file=$(timeout 5 find -L "$homedir" -type f -mtime -$DAYS_AGO \
                   -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1)
     
     if [ ! -z "$recent_file" ]; then
-        ((found++))
         timestamp=$(echo "$recent_file" | cut -d' ' -f1 | cut -d'.' -f1)
         date_str=$(date -d "@$timestamp" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "unknown")
-        echo "$timestamp|$user|$date_str"
+        active_users[$username]="$timestamp|$date_str"
+        ((active_count++))
     fi
-done | sort -n > "$TEMP_FILE"
+done
 
 echo ""
 echo "===================================================================="
-echo "Checked: $checked users"
-echo "Total active users: $(wc -l < "$TEMP_FILE")"
+echo "RESULTS"
+echo "===================================================================="
+echo "Total checked: $checked"
+echo "Skipped (user doesn't exist): $skipped"
+echo "Active users: $active_count"
 echo ""
 
-if [ $(wc -l < "$TEMP_FILE") -gt 0 ]; then
+# Create output file with timestamps
+TEMP_FILE="/tmp/active_users_detailed.txt"
+> "$TEMP_FILE"
+
+for user in "${!active_users[@]}"; do
+    IFS='|' read timestamp date_str <<< "${active_users[$user]}"
+    echo "$timestamp|$user|$date_str"
+done | sort -n > "$TEMP_FILE"
+
+if [ $active_count -gt 0 ]; then
     echo "FIRST 5 USERS (earliest activity):"
     echo "-----------------------------------"
     head -5 "$TEMP_FILE" | while IFS='|' read ts user date; do
@@ -64,7 +93,6 @@ fi
 
 # Save results
 cut -d'|' -f2 "$TEMP_FILE" > /tmp/active_users.txt
-cp "$TEMP_FILE" /tmp/active_users_detailed.txt
 
 echo "Lists saved to:"
 echo "  /tmp/active_users.txt (usernames only)"
