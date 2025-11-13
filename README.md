@@ -26,28 +26,28 @@ A user is considered active if they meet ANY of these criteria during the date r
 
 ## Scripts
 
-### 1. spydur_spydur_spydur_active_users.sh (For Spydur Cluster)
+### 1. spydur_active_users.sh (For Spydur Cluster)
 
 Comprehensive script designed for the Spydur HPC cluster with full infrastructure (SSH logs, /home, /scratch).
 
 **Usage:**
 ```bash
-./spydur_spydur_spydur_active_users.sh [START_DATE] [END_DATE]
+./spydur_active_users.sh [START_DATE] [END_DATE]
 ```
 
 **Examples:**
 ```bash
 # Find users active in the last 3 months (default)
-./spydur_spydur_spydur_active_users.sh
+./spydur_active_users.sh
 
 # Find users active between specific dates
-./spydur_spydur_spydur_active_users.sh 2024-09-01 2024-11-01
+./spydur_active_users.sh 2024-09-01 2024-11-01
 
 # Find users active since September 2024 until now
-./spydur_spydur_spydur_active_users.sh 2024-09-01
+./spydur_active_users.sh 2024-09-01
 
 # Find users active in October 2024
-./spydur_spydur_spydur_active_users.sh 2024-10-01 2024-10-31
+./spydur_active_users.sh 2024-10-01 2024-10-31
 ```
 
 **Detection Methods:**
@@ -90,16 +90,16 @@ Streamlined script designed for the Spiderweb server (web-based interactive comp
 
 **Usage:**
 ```bash
-./spiderweb_spydur_spydur_active_users.sh [START_DATE] [END_DATE]
+./spiderweb_active_users.sh [START_DATE] [END_DATE]
 ```
 
 **Examples:**
 ```bash
 # Quick count for last 3 months
-./spiderweb_spydur_spydur_active_users.sh
+./spiderweb_active_users.sh
 
 # Quick count for specific date range
-./spiderweb_spydur_spydur_active_users.sh 2024-09-01 2024-10-31
+./spiderweb_active_users.sh 2024-09-01 2024-10-31
 ```
 
 **Detection Methods:**
@@ -175,16 +175,6 @@ ln -s ~/active-users-tracker/spydur_active_users.sh ~/bin/active_users
 # (Make sure ~/bin is in your PATH)
 ```
 
-### Uninstall
-
-```bash
-# Remove user installation
-./undeploy.sh --local
-
-# Remove system installation
-sudo ./undeploy.sh --system
-```
-
 ## Requirements
 
 - Bash 4.0+ (for associative arrays)
@@ -256,7 +246,7 @@ QUARTER_START=$(date -d '3 months ago' +%Y-%m-01)
 ### Permission Denied on /var/log/secure
 ```bash
 # Run with sudo if needed for SSH log analysis
-sudo ./spydur_spydur_active_users.sh
+sudo ./spydur_active_users.sh
 ```
 
 ### No activity detected despite active users
@@ -265,7 +255,7 @@ sudo ./spydur_spydur_active_users.sh
 - Check if NFS/network filesystems are mounted
 
 ### Script runs too slowly
-- Use `spiderweb_spydur_active_users.sh` for faster results
+- Use `spiderweb_active_users.sh` for faster results
 - Reduce date range to check fewer days
 - Check for hung/unmounted directories
 
@@ -289,15 +279,3 @@ sudo ./spydur_spydur_active_users.sh
 ## License
 
 MIT License - Feel free to use and modify for your cluster management needs.
-
-## Contributing
-
-Pull requests welcome! Particularly interested in:
-- Support for additional activity sources (SLURM jobs, module usage, etc.)
-- Performance optimizations
-- Better handling of distributed filesystems
-- Integration with existing cluster monitoring tools
-
-## Authors
-
-Developed for HPC cluster administration at academic institutions.
