@@ -147,7 +147,7 @@ chmod +x *.sh
 
 The deployment script automatically detects your hostname and creates a symlink to the appropriate script:
 - On Spydur/Arachne: links to `spydur_active_users.sh`
-- On Spiderweb: links to `spiderweb_active_users.sh`
+- On Spiderweb (spiderweb or spdrweb): links to `spiderweb_active_users.sh`
 
 **Note:** The script only recognizes production server hostnames. For development machines, use manual installation below.
 
@@ -246,7 +246,7 @@ QUARTER_START=$(date -d '3 months ago' +%Y-%m-01)
 ### Permission Denied on /var/log/secure
 ```bash
 # Run with sudo if needed for SSH log analysis
-sudo ./spydur_active_users.sh
+sudo ./spydur_spydur_active_users.sh
 ```
 
 ### No activity detected despite active users
@@ -255,7 +255,7 @@ sudo ./spydur_active_users.sh
 - Check if NFS/network filesystems are mounted
 
 ### Script runs too slowly
-- Use `spiderweb_active_users.sh` for faster results
+- Use `spiderweb_spydur_active_users.sh` for faster results
 - Reduce date range to check fewer days
 - Check for hung/unmounted directories
 

@@ -18,7 +18,7 @@ case "$HOSTNAME" in
         SOURCE_SCRIPT="$SCRIPT_DIR/spydur_active_users.sh"
         SCRIPT_TYPE="spydur (HPC cluster)"
         ;;
-    spiderweb*)
+    spiderweb*|spdrweb*)
         # Web-based interactive computing server (RStudio, Jupyter)
         SOURCE_SCRIPT="$SCRIPT_DIR/spiderweb_active_users.sh"
         SCRIPT_TYPE="spiderweb (web-based computing server)"
@@ -27,8 +27,8 @@ case "$HOSTNAME" in
         echo "ERROR: Unknown hostname '$HOSTNAME'"
         echo ""
         echo "This script only recognizes production servers:"
-        echo "  - spydur* or arachne*  -> uses spydur_active_users.sh (HPC cluster)"
-        echo "  - spiderweb*           -> uses spiderweb_active_users.sh (web computing server)"
+        echo "  - spydur* or arachne*     -> uses spydur_active_users.sh (HPC cluster)"
+        echo "  - spiderweb* or spdrweb*  -> uses spiderweb_active_users.sh (web computing server)"
         echo ""
         echo "For development machines or other hosts, manually deploy:"
         echo ""
