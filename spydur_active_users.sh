@@ -10,8 +10,10 @@ END_DATE="${2:-$(date +%Y-%m-%d)}"
 # Calculate days ago from today
 START_DAYS_AGO=$(( ($(date +%s) - $(date -d "$START_DATE" +%s)) / 86400 ))
 END_DAYS_AGO=$(( ($(date +%s) - $(date -d "$END_DATE" +%s)) / 86400 ))
+DAYS_SPAN=$(( START_DAYS_AGO - END_DAYS_AGO ))
 
 echo "spydur: Finding active users between $START_DATE and $END_DATE"
+echo "        (from $START_DAYS_AGO days ago to $END_DAYS_AGO days ago, spanning $DAYS_SPAN days)"
 echo "===================================================================="
 
 # Associative arrays for tracking
@@ -74,6 +76,7 @@ echo "2. Checking /home directories..."
 checked=0
 skipped=0
 password_required=0
+password_required_users=()
 for homedir in /home/*; do
     [ ! -d "$homedir" ] && continue
     username=$(basename "$homedir")
@@ -96,6 +99,7 @@ for homedir in /home/*; do
     if [ $? -eq 1 ]; then
         # Password required, skip this user
         ((password_required++))
+        password_required_users+=("$username")
         continue
     fi
     
@@ -108,12 +112,17 @@ for homedir in /home/*; do
     fi
 done
 echo "   Checked: $checked, Skipped: $skipped already active, Password-required: $password_required, Total active: ${#active_users[@]}"
+if [ ${#password_required_users[@]} -gt 0 ]; then
+    echo "   First 10 users requiring password:"
+    printf '   %s\n' "${password_required_users[@]}" | head -10
+fi
 
 # Method 3: /scratch directories
 echo "3. Checking /scratch directories..."
 checked=0
 skipped=0
 password_required=0
+scratch_password_required_users=()
 for scratchdir in /scratch/*; do
     [ ! -d "$scratchdir" ] && continue
     username=$(basename "$scratchdir")
@@ -136,6 +145,7 @@ for scratchdir in /scratch/*; do
     if [ $? -eq 1 ]; then
         # Password required, skip this user
         ((password_required++))
+        scratch_password_required_users+=("$username")
         continue
     fi
     
@@ -148,11 +158,24 @@ for scratchdir in /scratch/*; do
     fi
 done
 echo "   Checked: $checked, Skipped: $skipped already active, Password-required: $password_required"
+if [ ${#scratch_password_required_users[@]} -gt 0 ]; then
+    echo "   First 10 users requiring password:"
+    printf '   %s\n' "${scratch_password_required_users[@]}" | head -10
+fi
 
 echo ""
 echo "===================================================================="
 echo "Total Active Users: ${#active_users[@]}"
 echo ""
+
+# Save password-required users to file for review
+if [ ${#password_required_users[@]} -gt 0 ] || [ ${#scratch_password_required_users[@]} -gt 0 ]; then
+    > /tmp/spydur_password_required_users.txt
+    printf '%s\n' "${password_required_users[@]}" "${scratch_password_required_users[@]}" | sort -u > /tmp/spydur_password_required_users.txt
+    unique_count=$(wc -l < /tmp/spydur_password_required_users.txt)
+    echo "Password-required users: $unique_count (saved to /tmp/spydur_password_required_users.txt)"
+    echo ""
+fi
 
 # Create sorted list with timestamps
 > /tmp/spydur_active_users_detailed.txt
