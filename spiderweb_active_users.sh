@@ -21,6 +21,7 @@ declare -A user_last_activity
 # Counters
 checked=0
 skipped=0
+password_required=0
 active_count=0
 
 # Check each directory in /home
@@ -35,7 +36,7 @@ for homedir in /home/*; do
     
     # Progress every 50 users
     if [ $((checked % 50)) -eq 0 ]; then
-        echo "  Progress: $checked checked, $active_count active, $skipped skipped"
+        echo "  Progress: $checked checked, $active_count active, $skipped skipped, $password_required password-required"
     fi
     
     # Check if user exists
@@ -44,13 +45,19 @@ for homedir in /home/*; do
         continue
     fi
     
-    # Find most recent file since START_DATE (using -mtime for better performance)
-    # Use timeout to avoid hanging on problematic directories
-    recent_file=$(timeout 5 find -L "$homedir" -type f -mtime -$DAYS_AGO \
-                  -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1)
+    # Use sudo to run as the user (so we can read their files)
+    # -n flag: non-interactive, fails if password needed
+    result=$(sudo -n -u "$username" bash -c "timeout 5 find -L '$homedir' -type f -mtime -$DAYS_AGO -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1" 2>/dev/null)
     
-    if [ ! -z "$recent_file" ]; then
-        timestamp=$(echo "$recent_file" | cut -d' ' -f1 | cut -d'.' -f1)
+    # Check sudo exit code
+    if [ $? -eq 1 ]; then
+        # Password required, skip this user
+        ((password_required++))
+        continue
+    fi
+    
+    if [ ! -z "$result" ]; then
+        timestamp=$(echo "$result" | cut -d' ' -f1 | cut -d'.' -f1)
         date_str=$(date -d "@$timestamp" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "unknown")
         active_users[$username]="$timestamp|$date_str"
         ((active_count++))
@@ -63,6 +70,7 @@ echo "RESULTS"
 echo "===================================================================="
 echo "Total checked: $checked"
 echo "Skipped (user doesn't exist): $skipped"
+echo "Skipped (password required): $password_required"
 echo "Active users: $active_count"
 echo ""
 

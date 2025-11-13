@@ -73,11 +73,12 @@ fi
 echo "2. Checking /home directories..."
 checked=0
 skipped=0
+password_required=0
 for homedir in /home/*; do
     [ ! -d "$homedir" ] && continue
     username=$(basename "$homedir")
     ((checked++))
-    [ $((checked % 100)) -eq 0 ] && echo "   ...checked $checked, skipped $skipped already active"
+    [ $((checked % 100)) -eq 0 ] && echo "   ...checked $checked, skipped $skipped already active, $password_required password-required"
     is_valid_user "$username" || continue
     
     # Skip if user already found active (optimization)
@@ -86,9 +87,17 @@ for homedir in /home/*; do
         continue
     fi
     
+    # Use sudo to run as the user (so we can read their files)
     # Find most recent file in date range (follow symlinks with -L)
-    recent_file=$(find -L "$homedir" -type f -newermt "$START_DATE" ! -newermt "$END_DATE 23:59:59" \
-                  -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1)
+    recent_file=$(sudo -n -u "$username" bash -c "find -L '$homedir' -type f -newermt '$START_DATE' ! -newermt '$END_DATE 23:59:59' \
+                  -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1" 2>/dev/null)
+    
+    # Check sudo exit code
+    if [ $? -eq 1 ]; then
+        # Password required, skip this user
+        ((password_required++))
+        continue
+    fi
     
     if [ ! -z "$recent_file" ]; then
         timestamp=$(echo "$recent_file" | cut -d' ' -f1 | cut -d'.' -f1)
@@ -96,17 +105,18 @@ for homedir in /home/*; do
         update_last_activity "$username" "$timestamp"
     fi
 done
-echo "   Checked: $checked, Skipped: $skipped already active, Total active: ${#active_users[@]}"
+echo "   Checked: $checked, Skipped: $skipped already active, Password-required: $password_required, Total active: ${#active_users[@]}"
 
 # Method 3: /scratch directories
 echo "3. Checking /scratch directories..."
 checked=0
 skipped=0
+password_required=0
 for scratchdir in /scratch/*; do
     [ ! -d "$scratchdir" ] && continue
     username=$(basename "$scratchdir")
     ((checked++))
-    [ $((checked % 100)) -eq 0 ] && echo "   ...checked $checked, skipped $skipped already active"
+    [ $((checked % 100)) -eq 0 ] && echo "   ...checked $checked, skipped $skipped already active, $password_required password-required"
     is_valid_user "$username" || continue
     
     # Skip if user already found active (optimization)
@@ -115,9 +125,17 @@ for scratchdir in /scratch/*; do
         continue
     fi
     
+    # Use sudo to run as the user (so we can read their files)
     # Find most recent file in date range (follow symlinks with -L)
-    recent_file=$(find -L "$scratchdir" -type f -newermt "$START_DATE" ! -newermt "$END_DATE 23:59:59" \
-                  -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1)
+    recent_file=$(sudo -n -u "$username" bash -c "find -L '$scratchdir' -type f -newermt '$START_DATE' ! -newermt '$END_DATE 23:59:59' \
+                  -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1" 2>/dev/null)
+    
+    # Check sudo exit code
+    if [ $? -eq 1 ]; then
+        # Password required, skip this user
+        ((password_required++))
+        continue
+    fi
     
     if [ ! -z "$recent_file" ]; then
         timestamp=$(echo "$recent_file" | cut -d' ' -f1 | cut -d'.' -f1)
@@ -125,7 +143,7 @@ for scratchdir in /scratch/*; do
         update_last_activity "$username" "$timestamp"
     fi
 done
-echo "   Checked: $checked, Skipped: $skipped already active"
+echo "   Checked: $checked, Skipped: $skipped already active, Password-required: $password_required"
 
 echo ""
 echo "===================================================================="
