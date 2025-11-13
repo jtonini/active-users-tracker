@@ -72,12 +72,19 @@ fi
 # Method 2: /home directories
 echo "2. Checking /home directories..."
 checked=0
+skipped=0
 for homedir in /home/*; do
     [ ! -d "$homedir" ] && continue
     username=$(basename "$homedir")
     ((checked++))
-    [ $((checked % 100)) -eq 0 ] && echo "   ...checked $checked"
+    [ $((checked % 100)) -eq 0 ] && echo "   ...checked $checked, skipped $skipped already active"
     is_valid_user "$username" || continue
+    
+    # Skip if user already found active (optimization)
+    if [ ! -z "${active_users[$username]}" ]; then
+        ((skipped++))
+        continue
+    fi
     
     # Find most recent file in date range (follow symlinks with -L)
     recent_file=$(find -L "$homedir" -type f -newermt "$START_DATE" ! -newermt "$END_DATE 23:59:59" \
@@ -89,17 +96,24 @@ for homedir in /home/*; do
         update_last_activity "$username" "$timestamp"
     fi
 done
-echo "   Total: ${#active_users[@]} users with home activity"
+echo "   Checked: $checked, Skipped: $skipped already active, Total active: ${#active_users[@]}"
 
 # Method 3: /scratch directories
 echo "3. Checking /scratch directories..."
 checked=0
+skipped=0
 for scratchdir in /scratch/*; do
     [ ! -d "$scratchdir" ] && continue
     username=$(basename "$scratchdir")
     ((checked++))
-    [ $((checked % 100)) -eq 0 ] && echo "   ...checked $checked"
+    [ $((checked % 100)) -eq 0 ] && echo "   ...checked $checked, skipped $skipped already active"
     is_valid_user "$username" || continue
+    
+    # Skip if user already found active (optimization)
+    if [ ! -z "${active_users[$username]}" ]; then
+        ((skipped++))
+        continue
+    fi
     
     # Find most recent file in date range (follow symlinks with -L)
     recent_file=$(find -L "$scratchdir" -type f -newermt "$START_DATE" ! -newermt "$END_DATE 23:59:59" \
@@ -111,6 +125,7 @@ for scratchdir in /scratch/*; do
         update_last_activity "$username" "$timestamp"
     fi
 done
+echo "   Checked: $checked, Skipped: $skipped already active"
 
 echo ""
 echo "===================================================================="
