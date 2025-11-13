@@ -84,9 +84,9 @@ Full list saved to:
   /tmp/spydur_active_users_detailed.txt (with timestamps and methods)
 ```
 
-### 2. spiderweb_spydur_spydur_active_users.sh (For Spiderweb Server)
+### 2. spiderweb_active_users.sh (For Spiderweb Server)
 
-Streamlined script designed for the Spiderweb server (workstation environment without cluster infrastructure).
+Streamlined script designed for the Spiderweb server (web-based interactive computing server running RStudio and Jupyter).
 
 **Usage:**
 ```bash
@@ -130,10 +130,59 @@ Lists saved to:
 
 ## Installation
 
+### Quick Install (Automated)
+
 ```bash
-git clone <repository-url>
+git clone git@github.com:jtonini/active-users-tracker.git
 cd active-users-tracker
-chmod +x spydur_spydur_active_users.sh spiderweb_spydur_active_users.sh
+chmod +x *.sh
+
+# Deploy to ~/bin (user installation)
+./deploy.sh --local
+
+# OR deploy to /usr/local/sw/bin (system-wide)
+./deploy.sh --system
+# Note: Only use sudo if you don't have write permissions to /usr/local/sw/bin
+```
+
+The deployment script automatically detects your hostname and creates a symlink to the appropriate script:
+- On Spydur/Arachne: links to `spydur_active_users.sh`
+- On Spiderweb: links to `spiderweb_active_users.sh`
+
+**Note:** The script only recognizes production server hostnames. For development machines, use manual installation below.
+
+After deployment, you can run:
+```bash
+active_users                          # Last 3 months
+active_users 2024-09-01              # Since date
+active_users 2024-09-01 2024-10-31   # Date range
+```
+
+### Manual Install
+
+If you prefer manual installation, are on a development machine, or the hostname detection doesn't work:
+
+```bash
+# On Spydur or Arachne (HPC clusters with SSH logs and /scratch)
+ln -s ~/active-users-tracker/spydur_active_users.sh /usr/local/sw/bin/active_users
+
+# On Spiderweb (web-based computing server with RStudio/Jupyter)
+ln -s ~/active-users-tracker/spiderweb_active_users.sh /usr/local/sw/bin/active_users
+
+# For development/testing, you can create symlinks in ~/bin:
+mkdir -p ~/bin
+ln -s ~/active-users-tracker/spydur_active_users.sh ~/bin/active_users
+# (Make sure ~/bin is in your PATH)
+```
+
+### Uninstall
+
+```bash
+# Remove user installation
+./undeploy.sh --local
+
+# Remove system installation
+sudo ./undeploy.sh --system
 ```
 
 ## Requirements
