@@ -87,10 +87,10 @@ for homedir in /home/*; do
         continue
     fi
     
-    # Use sudo to run as the user (so we can read their files)
-    # Find most recent file in date range (follow symlinks with -L)
-    recent_file=$(sudo -n -u "$username" bash -c "find -L '$homedir' -type f -newermt '$START_DATE' ! -newermt '$END_DATE 23:59:59' \
-                  -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1" 2>/dev/null)
+    # OPTIMIZATION: Stop as soon as we find ANY file in the date range
+    # Use -print -quit to stop immediately after finding first match
+    found_file=$(sudo -n -u "$username" bash -c "find -L '$homedir' -type f -newermt '$START_DATE' ! -newermt '$END_DATE 23:59:59' \
+                  -print -quit 2>/dev/null" 2>/dev/null)
     
     # Check sudo exit code
     if [ $? -eq 1 ]; then
@@ -99,9 +99,11 @@ for homedir in /home/*; do
         continue
     fi
     
-    if [ ! -z "$recent_file" ]; then
-        timestamp=$(echo "$recent_file" | cut -d' ' -f1 | cut -d'.' -f1)
-        active_users[$username]="${active_users[$username]:+${active_users[$username]},}home"
+    if [ ! -z "$found_file" ]; then
+        # User is active - we found at least one file
+        # Use END_DATE as timestamp since we don't know exact time
+        timestamp=$(date -d "$END_DATE" +%s)
+        active_users[$username]="home"
         update_last_activity "$username" "$timestamp"
     fi
 done
@@ -125,10 +127,10 @@ for scratchdir in /scratch/*; do
         continue
     fi
     
-    # Use sudo to run as the user (so we can read their files)
-    # Find most recent file in date range (follow symlinks with -L)
-    recent_file=$(sudo -n -u "$username" bash -c "find -L '$scratchdir' -type f -newermt '$START_DATE' ! -newermt '$END_DATE 23:59:59' \
-                  -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1" 2>/dev/null)
+    # OPTIMIZATION: Stop as soon as we find ANY file in the date range
+    # Use -print -quit to stop immediately after finding first match
+    found_file=$(sudo -n -u "$username" bash -c "find -L '$scratchdir' -type f -newermt '$START_DATE' ! -newermt '$END_DATE 23:59:59' \
+                  -print -quit 2>/dev/null" 2>/dev/null)
     
     # Check sudo exit code
     if [ $? -eq 1 ]; then
@@ -137,9 +139,11 @@ for scratchdir in /scratch/*; do
         continue
     fi
     
-    if [ ! -z "$recent_file" ]; then
-        timestamp=$(echo "$recent_file" | cut -d' ' -f1 | cut -d'.' -f1)
-        active_users[$username]="${active_users[$username]:+${active_users[$username]},}scratch"
+    if [ ! -z "$found_file" ]; then
+        # User is active - we found at least one file
+        # Use END_DATE as timestamp since we don't know exact time
+        timestamp=$(date -d "$END_DATE" +%s)
+        active_users[$username]="scratch"
         update_last_activity "$username" "$timestamp"
     fi
 done
