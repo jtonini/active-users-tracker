@@ -79,8 +79,8 @@ for homedir in /home/*; do
     [ $((checked % 100)) -eq 0 ] && echo "   ...checked $checked"
     is_valid_user "$username" || continue
     
-    # Find most recent file in date range
-    recent_file=$(find "$homedir" -type f -newermt "$START_DATE" ! -newermt "$END_DATE 23:59:59" \
+    # Find most recent file in date range (follow symlinks with -L)
+    recent_file=$(find -L "$homedir" -type f -newermt "$START_DATE" ! -newermt "$END_DATE 23:59:59" \
                   -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1)
     
     if [ ! -z "$recent_file" ]; then
@@ -101,8 +101,8 @@ for scratchdir in /scratch/*; do
     [ $((checked % 100)) -eq 0 ] && echo "   ...checked $checked"
     is_valid_user "$username" || continue
     
-    # Find most recent file in date range
-    recent_file=$(find "$scratchdir" -type f -newermt "$START_DATE" ! -newermt "$END_DATE 23:59:59" \
+    # Find most recent file in date range (follow symlinks with -L)
+    recent_file=$(find -L "$scratchdir" -type f -newermt "$START_DATE" ! -newermt "$END_DATE 23:59:59" \
                   -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1)
     
     if [ ! -z "$recent_file" ]; then
