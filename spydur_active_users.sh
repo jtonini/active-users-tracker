@@ -91,7 +91,7 @@ for homedir in /home/*; do
     [ ! -d "$homedir" ] && continue
     username=$(basename "$homedir")
     ((checked++))
-    [ $((checked % 100)) -eq 0 ] && echo "   ...checked $checked, skipped $skipped already active, $password_required password-required"
+    [ $((checked % 50)) -eq 0 ] && echo "   ...checked $checked, skipped $skipped already active, $password_required errors"
     is_valid_user "$username" || continue
     
     # Skip if user already found active (optimization)
@@ -100,10 +100,14 @@ for homedir in /home/*; do
         continue
     fi
     
+    # Show which user we're checking (useful for debugging hangs)
+    [ $DEBUG -eq 1 ] && echo "   DEBUG: Checking /home for user: $username"
+    
     # OPTIMIZATION: Stop as soon as we find ANY file in the date range
     # Use -print -quit to stop immediately after finding first match
     # Note: -print -quit returns exit 1 when it finds a file, so check output not exit code
-    found_file=$(sudo -n -u "$username" bash -c "find -L '$homedir' -type f -newermt '$START_DATE' ! -newermt '$END_DATE 23:59:59' \
+    # Timeout after 30 seconds to prevent hanging on problematic directories
+    found_file=$(timeout 30 sudo -n -u "$username" bash -c "find -L '$homedir' -type f -newermt '$START_DATE' ! -newermt '$END_DATE 23:59:59' \
                   -print -quit 2>/dev/null" 2>&1)
     sudo_exit=$?
     
@@ -114,6 +118,11 @@ for homedir in /home/*; do
         timestamp=$(date -d "$END_DATE" +%s)
         active_users[$username]="home"
         update_last_activity "$username" "$timestamp"
+    elif [ $sudo_exit -eq 124 ]; then
+        # Timeout - directory too large or hung filesystem
+        [ $DEBUG -eq 1 ] && echo "   DEBUG: User $username timed out (directory too large or NFS issue)"
+        ((password_required++))
+        password_required_users+=("$username (timeout)")
     elif [ $sudo_exit -ne 0 ]; then
         # No output but non-zero exit = actual error (permission denied, etc)
         ((password_required++))
@@ -138,7 +147,7 @@ for scratchdir in /scratch/*; do
     [ ! -d "$scratchdir" ] && continue
     username=$(basename "$scratchdir")
     ((checked++))
-    [ $((checked % 100)) -eq 0 ] && echo "   ...checked $checked, skipped $skipped already active, $password_required password-required"
+    [ $((checked % 50)) -eq 0 ] && echo "   ...checked $checked, skipped $skipped already active, $password_required errors"
     is_valid_user "$username" || continue
     
     # Skip if user already found active (optimization)
@@ -147,10 +156,14 @@ for scratchdir in /scratch/*; do
         continue
     fi
     
+    # Show which user we're checking (useful for debugging hangs)
+    [ $DEBUG -eq 1 ] && echo "   DEBUG: Checking /scratch for user: $username"
+    
     # OPTIMIZATION: Stop as soon as we find ANY file in the date range
     # Use -print -quit to stop immediately after finding first match
     # Note: -print -quit returns exit 1 when it finds a file, so check output not exit code
-    found_file=$(sudo -n -u "$username" bash -c "find -L '$scratchdir' -type f -newermt '$START_DATE' ! -newermt '$END_DATE 23:59:59' \
+    # Timeout after 30 seconds to prevent hanging on problematic directories
+    found_file=$(timeout 30 sudo -n -u "$username" bash -c "find -L '$scratchdir' -type f -newermt '$START_DATE' ! -newermt '$END_DATE 23:59:59' \
                   -print -quit 2>/dev/null" 2>&1)
     sudo_exit=$?
     
@@ -161,6 +174,11 @@ for scratchdir in /scratch/*; do
         timestamp=$(date -d "$END_DATE" +%s)
         active_users[$username]="scratch"
         update_last_activity "$username" "$timestamp"
+    elif [ $sudo_exit -eq 124 ]; then
+        # Timeout - directory too large or hung filesystem
+        [ $DEBUG -eq 1 ] && echo "   DEBUG: User $username timed out (directory too large or NFS issue)"
+        ((password_required++))
+        scratch_password_required_users+=("$username (timeout)")
     elif [ $sudo_exit -ne 0 ]; then
         # No output but non-zero exit = actual error (permission denied, etc)
         ((password_required++))
