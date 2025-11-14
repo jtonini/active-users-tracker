@@ -39,10 +39,14 @@ is_valid_user() {
     esac
     # Check if user exists in system (even if LDAP)
     if id "$username" &>/dev/null; then
-        return 0
+        # Additional check: user should have UID >= 1000 (not a system user)
+        uid=$(id -u "$username" 2>/dev/null)
+        if [ ! -z "$uid" ] && [ "$uid" -ge 1000 ]; then
+            return 0
+        fi
     fi
-    # If can't verify, include if username looks valid (starts with letter)
-    [[ "$username" =~ ^[a-z] ]] && return 0
+    # Don't include users that don't exist - removed fallback for "looks valid"
+    # This prevents treating non-user directories as users
     return 1
 }
 
@@ -98,26 +102,25 @@ for homedir in /home/*; do
     
     # OPTIMIZATION: Stop as soon as we find ANY file in the date range
     # Use -print -quit to stop immediately after finding first match
+    # Note: -print -quit returns exit 1 when it finds a file, so check output not exit code
     found_file=$(sudo -n -u "$username" bash -c "find -L '$homedir' -type f -newermt '$START_DATE' ! -newermt '$END_DATE 23:59:59' \
                   -print -quit 2>/dev/null" 2>&1)
     sudo_exit=$?
     
-    # Check sudo exit code (1 = password required, other non-zero = other error)
-    if [ $sudo_exit -ne 0 ]; then
-        # Some error occurred
-        ((password_required++))
-        password_required_users+=("$username")
-        [ $DEBUG -eq 1 ] && echo "   DEBUG: User $username failed with exit code $sudo_exit: $found_file"
-        continue
-    fi
-    
+    # If we got a file path, user is active (even if exit code is 1 from -quit)
     if [ ! -z "$found_file" ]; then
         # User is active - we found at least one file
         # Use END_DATE as timestamp since we don't know exact time
         timestamp=$(date -d "$END_DATE" +%s)
         active_users[$username]="home"
         update_last_activity "$username" "$timestamp"
+    elif [ $sudo_exit -ne 0 ]; then
+        # No output but non-zero exit = actual error (permission denied, etc)
+        ((password_required++))
+        password_required_users+=("$username")
+        [ $DEBUG -eq 1 ] && echo "   DEBUG: User $username failed with exit code $sudo_exit (no sudo access or other error)"
     fi
+    # If no file and exit 0 = user just not active in this period (normal)
 done
 echo "   Checked: $checked, Skipped: $skipped already active, Password-required: $password_required, Total active: ${#active_users[@]}"
 if [ ${#password_required_users[@]} -gt 0 ]; then
@@ -146,26 +149,25 @@ for scratchdir in /scratch/*; do
     
     # OPTIMIZATION: Stop as soon as we find ANY file in the date range
     # Use -print -quit to stop immediately after finding first match
+    # Note: -print -quit returns exit 1 when it finds a file, so check output not exit code
     found_file=$(sudo -n -u "$username" bash -c "find -L '$scratchdir' -type f -newermt '$START_DATE' ! -newermt '$END_DATE 23:59:59' \
                   -print -quit 2>/dev/null" 2>&1)
     sudo_exit=$?
     
-    # Check sudo exit code (1 = password required, other non-zero = other error)
-    if [ $sudo_exit -ne 0 ]; then
-        # Some error occurred
-        ((password_required++))
-        scratch_password_required_users+=("$username")
-        [ $DEBUG -eq 1 ] && echo "   DEBUG: User $username failed with exit code $sudo_exit: $found_file"
-        continue
-    fi
-    
+    # If we got a file path, user is active (even if exit code is 1 from -quit)
     if [ ! -z "$found_file" ]; then
         # User is active - we found at least one file
         # Use END_DATE as timestamp since we don't know exact time
         timestamp=$(date -d "$END_DATE" +%s)
         active_users[$username]="scratch"
         update_last_activity "$username" "$timestamp"
+    elif [ $sudo_exit -ne 0 ]; then
+        # No output but non-zero exit = actual error (permission denied, etc)
+        ((password_required++))
+        scratch_password_required_users+=("$username")
+        [ $DEBUG -eq 1 ] && echo "   DEBUG: User $username failed with exit code $sudo_exit (no sudo access or other error)"
     fi
+    # If no file and exit 0 = user just not active in this period (normal)
 done
 echo "   Checked: $checked, Skipped: $skipped already active, Password-required: $password_required"
 if [ ${#scratch_password_required_users[@]} -gt 0 ]; then
