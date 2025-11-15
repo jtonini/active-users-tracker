@@ -18,8 +18,7 @@ START_DAYS_AGO=$(( ($(date +%s) - $(date -d "$START_DATE" +%s)) / 86400 ))
 END_DAYS_AGO=$(( ($(date +%s) - $(date -d "$END_DATE" +%s)) / 86400 ))
 DAYS_SPAN=$(( START_DAYS_AGO - END_DAYS_AGO ))
 
-echo "spydur: Finding active users between $START_DATE and $END_DATE"
-echo "        (from $START_DAYS_AGO days ago to $END_DAYS_AGO days ago, spanning $DAYS_SPAN days)"
+echo "spydur: Finding active users since $START_DATE ($START_DAYS_AGO days ago)"
 echo "===================================================================="
 
 # Associative arrays for tracking
@@ -91,7 +90,7 @@ for homedir in /home/*; do
     [ ! -d "$homedir" ] && continue
     username=$(basename "$homedir")
     ((checked++))
-    [ $((checked % 50)) -eq 0 ] && echo "   ...checked $checked, skipped $skipped already active, $password_required errors"
+    [ $((checked % 50)) -eq 0 ] && echo "  Progress: $checked checked, ${#active_users[@]} active, $skipped skipped, $password_required errors"
     is_valid_user "$username" || continue
     
     # Skip if user already found active (optimization)
@@ -131,11 +130,7 @@ for homedir in /home/*; do
     fi
     # If no file and exit 0 or 1 = user just not active in this period (normal)
 done
-echo "   Checked: $checked, Skipped: $skipped already active, Errors/Timeouts: $password_required, Total active: ${#active_users[@]}"
-if [ ${#password_required_users[@]} -gt 0 ]; then
-    echo "   First 10 users with errors/timeouts (run with DEBUG=1 for details):"
-    printf '   %s\n' "${password_required_users[@]}" | head -10
-fi
+echo ""
 
 # Method 3: /scratch directories
 echo "3. Checking /scratch directories..."
@@ -147,7 +142,7 @@ for scratchdir in /scratch/*; do
     [ ! -d "$scratchdir" ] && continue
     username=$(basename "$scratchdir")
     ((checked++))
-    [ $((checked % 50)) -eq 0 ] && echo "   ...checked $checked, skipped $skipped already active, $password_required errors"
+    [ $((checked % 50)) -eq 0 ] && echo "  Progress: $checked checked, ${#active_users[@]} active, $skipped skipped, $password_required errors"
     is_valid_user "$username" || continue
     
     # Skip if user already found active (optimization)
@@ -187,26 +182,22 @@ for scratchdir in /scratch/*; do
     fi
     # If no file and exit 0 or 1 = user just not active in this period (normal)
 done
-echo "   Checked: $checked, Skipped: $skipped already active, Errors/Timeouts: $password_required"
-if [ ${#scratch_password_required_users[@]} -gt 0 ]; then
-    echo "   First 10 users with errors/timeouts (run with DEBUG=1 for details):"
-    printf '   %s\n' "${scratch_password_required_users[@]}" | head -10
-fi
+echo ""
 
 echo ""
 echo "===================================================================="
-echo "Total Active Users: ${#active_users[@]}"
-echo ""
+echo "RESULTS"
+echo "===================================================================="
+echo "Total active users: ${#active_users[@]}"
 
 # Save password-required users to file for review
 if [ ${#password_required_users[@]} -gt 0 ] || [ ${#scratch_password_required_users[@]} -gt 0 ]; then
     > /tmp/spydur_password_required_users.txt
     printf '%s\n' "${password_required_users[@]}" "${scratch_password_required_users[@]}" | sort -u > /tmp/spydur_password_required_users.txt
     unique_count=$(wc -l < /tmp/spydur_password_required_users.txt)
-    echo "Users with errors/timeouts: $unique_count (saved to /tmp/spydur_password_required_users.txt)"
-    echo "Run with DEBUG=1 to see error details"
-    echo ""
+    echo "Skipped (errors/timeouts): $unique_count"
 fi
+echo ""
 
 # Create sorted list with timestamps
 > /tmp/spydur_active_users_detailed.txt
@@ -219,20 +210,20 @@ done | sort -n > /tmp/spydur_active_users_detailed.txt
 # Extract just usernames sorted by activity
 cut -d'|' -f2 /tmp/spydur_active_users_detailed.txt > /tmp/spydur_active_users.txt
 
-echo "FIRST 5 USERS TO BECOME ACTIVE (earliest activity):"
-echo "---------------------------------------------------"
+echo "FIRST 5 USERS (earliest activity):"
+echo "-----------------------------------"
 head -5 /tmp/spydur_active_users_detailed.txt | while IFS='|' read ts user date methods; do
-    printf "%-20s %s (via: %s)\n" "$user" "$date" "$methods"
+    printf "%-20s %s\n" "$user" "$date"
 done
 
 echo ""
-echo "LAST 5 USERS TO BECOME ACTIVE (most recent activity):"
-echo "------------------------------------------------------"
+echo "LAST 5 USERS (most recent activity):"
+echo "-------------------------------------"
 tail -5 /tmp/spydur_active_users_detailed.txt | while IFS='|' read ts user date methods; do
-    printf "%-20s %s (via: %s)\n" "$user" "$date" "$methods"
+    printf "%-20s %s\n" "$user" "$date"
 done
 
 echo ""
-echo "Full list saved to:"
+echo "Lists saved to:"
 echo "  /tmp/spydur_active_users.txt (usernames only)"
-echo "  /tmp/spydur_active_users_detailed.txt (with timestamps and methods)"
+echo "  /tmp/spydur_active_users_detailed.txt (with timestamps)"

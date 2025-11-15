@@ -7,14 +7,12 @@
 START_DATE="${1:-$(date -d '3 months ago' +%Y-%m-%d)}"
 END_DATE="${2:-$(date +%Y-%m-%d)}"
 
-# Calculate days ago from today
-START_DAYS_AGO=$(( ($(date +%s) - $(date -d "$START_DATE" +%s)) / 86400 ))
-END_DAYS_AGO=$(( ($(date +%s) - $(date -d "$END_DATE" +%s)) / 86400 ))
-DAYS_SPAN=$(( START_DAYS_AGO - END_DAYS_AGO ))
+# Calculate days ago for -mtime (from today to START_DATE)
+DAYS_AGO=$(( ($(date +%s) - $(date -d "$START_DATE" +%s)) / 86400 ))
 
-echo "spiderweb: Finding active users between $START_DATE and $END_DATE"
-echo "           (from $START_DAYS_AGO days ago to $END_DAYS_AGO days ago, spanning $DAYS_SPAN days)"
+echo "spiderweb: Finding active users since $START_DATE ($DAYS_AGO days ago)"
 echo "===================================================================="
+echo ""
 
 # Associative array to track active users
 declare -A active_users
@@ -23,12 +21,10 @@ declare -A user_last_activity
 # Counters
 checked=0
 skipped=0
-errors=0
+password_required=0
 active_count=0
 
-# Check /home directories
-echo "Checking /home directories..."
-
+# Check each directory in /home
 for homedir in /home/*; do
     [ ! -d "$homedir" ] && continue
     username=$(basename "$homedir")
@@ -40,7 +36,7 @@ for homedir in /home/*; do
     
     # Progress every 50 users
     if [ $((checked % 50)) -eq 0 ]; then
-        echo "   ...checked $checked, skipped $skipped already active, $errors errors"
+        echo "  Progress: $checked checked, $active_count active, $skipped skipped, $password_required password-required"
     fi
     
     # Check if user exists
@@ -51,15 +47,12 @@ for homedir in /home/*; do
     
     # Use sudo to run as the user (so we can read their files)
     # -n flag: non-interactive, fails if password needed
-    # Calculate DAYS_AGO for -mtime (from today to START_DATE)
-    DAYS_AGO=$(( ($(date +%s) - $(date -d "$START_DATE" +%s)) / 86400 ))
-    
     result=$(sudo -n -u "$username" bash -c "timeout 10 find -L '$homedir' -type f -mtime -$DAYS_AGO -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1" 2>/dev/null)
     
     # Check sudo exit code
     if [ $? -eq 1 ]; then
         # Password required, skip this user
-        ((errors++))
+        ((password_required++))
         continue
     fi
     
@@ -71,11 +64,14 @@ for homedir in /home/*; do
     fi
 done
 
-echo "   Checked: $checked, Skipped: $skipped (user doesn't exist), Errors: $errors, Total active: $active_count"
-
 echo ""
 echo "===================================================================="
-echo "Total Active Users: $active_count"
+echo "RESULTS"
+echo "===================================================================="
+echo "Total checked: $checked"
+echo "Skipped (user doesn't exist): $skipped"
+echo "Skipped (password required): $password_required"
+echo "Active users: $active_count"
 echo ""
 
 # Create output file with timestamps
@@ -84,21 +80,21 @@ TEMP_FILE="/tmp/active_users_detailed.txt"
 
 for user in "${!active_users[@]}"; do
     IFS='|' read timestamp date_str <<< "${active_users[$user]}"
-    echo "$timestamp|$user|$date_str|home"
+    echo "$timestamp|$user|$date_str"
 done | sort -n > "$TEMP_FILE"
 
 if [ $active_count -gt 0 ]; then
-    echo "FIRST 5 USERS TO BECOME ACTIVE (earliest activity):"
-    echo "---------------------------------------------------"
-    head -5 "$TEMP_FILE" | while IFS='|' read ts user date methods; do
-        printf "%-20s %s (via: %s)\n" "$user" "$date" "$methods"
+    echo "FIRST 5 USERS (earliest activity):"
+    echo "-----------------------------------"
+    head -5 "$TEMP_FILE" | while IFS='|' read ts user date; do
+        printf "%-20s %s\n" "$user" "$date"
     done
     
     echo ""
-    echo "LAST 5 USERS TO BECOME ACTIVE (most recent activity):"
-    echo "------------------------------------------------------"
-    tail -5 "$TEMP_FILE" | while IFS='|' read ts user date methods; do
-        printf "%-20s %s (via: %s)\n" "$user" "$date" "$methods"
+    echo "LAST 5 USERS (most recent activity):"
+    echo "-------------------------------------"
+    tail -5 "$TEMP_FILE" | while IFS='|' read ts user date; do
+        printf "%-20s %s\n" "$user" "$date"
     done
     
     echo ""
@@ -107,6 +103,6 @@ fi
 # Save results
 cut -d'|' -f2 "$TEMP_FILE" > /tmp/active_users.txt
 
-echo "Full list saved to:"
+echo "Lists saved to:"
 echo "  /tmp/active_users.txt (usernames only)"
-echo "  /tmp/active_users_detailed.txt (with timestamps and methods)"
+echo "  /tmp/active_users_detailed.txt (with timestamps)"
