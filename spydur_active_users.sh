@@ -106,8 +106,8 @@ for homedir in /home/*; do
     # OPTIMIZATION: Stop as soon as we find ANY file in the date range
     # Use -print -quit to stop immediately after finding first match
     # Run as installer user (has read access) rather than impersonating with sudo
-    # Timeout after 3 seconds to prevent hanging on problematic directories
-    found_file=$(timeout 3 find -L "$homedir" -type f -newermt "$START_DATE" ! -newermt "$END_DATE 23:59:59" \
+    # Timeout after 10 seconds to prevent hanging on problematic directories
+    found_file=$(timeout 10 find -L "$homedir" -type f -newermt "$START_DATE" ! -newermt "$END_DATE 23:59:59" \
                   -print -quit 2>/dev/null)
     find_exit=$?
     
@@ -162,8 +162,8 @@ for scratchdir in /scratch/*; do
     # OPTIMIZATION: Stop as soon as we find ANY file in the date range
     # Use -print -quit to stop immediately after finding first match
     # Run as installer user (has read access) rather than impersonating with sudo
-    # Timeout after 3 seconds to prevent hanging on problematic directories
-    found_file=$(timeout 3 find -L "$scratchdir" -type f -newermt "$START_DATE" ! -newermt "$END_DATE 23:59:59" \
+    # Timeout after 10 seconds to prevent hanging on problematic directories
+    found_file=$(timeout 10 find -L "$scratchdir" -type f -newermt "$START_DATE" ! -newermt "$END_DATE 23:59:59" \
                   -print -quit 2>/dev/null)
     find_exit=$?
     
