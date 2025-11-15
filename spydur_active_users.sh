@@ -105,11 +105,11 @@ for homedir in /home/*; do
     
     # OPTIMIZATION: Stop as soon as we find ANY file in the date range
     # Use -print -quit to stop immediately after finding first match
-    # Note: -print -quit returns exit 1 when it finds a file, so check output not exit code
-    # Timeout after 30 seconds to prevent hanging on problematic directories
-    found_file=$(timeout 30 sudo -n -u "$username" bash -c "find -L '$homedir' -type f -newermt '$START_DATE' ! -newermt '$END_DATE 23:59:59' \
-                  -print -quit 2>/dev/null" 2>&1)
-    sudo_exit=$?
+    # Run as installer user (has read access) rather than impersonating with sudo
+    # Timeout after 3 seconds to prevent hanging on problematic directories
+    found_file=$(timeout 3 find -L "$homedir" -type f -newermt "$START_DATE" ! -newermt "$END_DATE 23:59:59" \
+                  -print -quit 2>/dev/null)
+    find_exit=$?
     
     # If we got a file path, user is active (even if exit code is 1 from -quit)
     if [ ! -z "$found_file" ]; then
@@ -118,22 +118,22 @@ for homedir in /home/*; do
         timestamp=$(date -d "$END_DATE" +%s)
         active_users[$username]="home"
         update_last_activity "$username" "$timestamp"
-    elif [ $sudo_exit -eq 124 ]; then
+    elif [ $find_exit -eq 124 ]; then
         # Timeout - directory too large or hung filesystem
         [ $DEBUG -eq 1 ] && echo "   DEBUG: User $username timed out (directory too large or NFS issue)"
         ((password_required++))
         password_required_users+=("$username (timeout)")
-    elif [ $sudo_exit -ne 0 ]; then
-        # No output but non-zero exit = actual error (permission denied, etc)
+    elif [ $find_exit -ne 0 ] && [ $find_exit -ne 1 ]; then
+        # Other error (not timeout, not normal -quit exit)
         ((password_required++))
         password_required_users+=("$username")
-        [ $DEBUG -eq 1 ] && echo "   DEBUG: User $username failed with exit code $sudo_exit (no sudo access or other error)"
+        [ $DEBUG -eq 1 ] && echo "   DEBUG: User $username failed with exit code $find_exit"
     fi
-    # If no file and exit 0 = user just not active in this period (normal)
+    # If no file and exit 0 or 1 = user just not active in this period (normal)
 done
-echo "   Checked: $checked, Skipped: $skipped already active, Password-required: $password_required, Total active: ${#active_users[@]}"
+echo "   Checked: $checked, Skipped: $skipped already active, Errors/Timeouts: $password_required, Total active: ${#active_users[@]}"
 if [ ${#password_required_users[@]} -gt 0 ]; then
-    echo "   First 10 users with sudo errors (run with DEBUG=1 for details):"
+    echo "   First 10 users with errors/timeouts (run with DEBUG=1 for details):"
     printf '   %s\n' "${password_required_users[@]}" | head -10
 fi
 
@@ -161,11 +161,11 @@ for scratchdir in /scratch/*; do
     
     # OPTIMIZATION: Stop as soon as we find ANY file in the date range
     # Use -print -quit to stop immediately after finding first match
-    # Note: -print -quit returns exit 1 when it finds a file, so check output not exit code
-    # Timeout after 30 seconds to prevent hanging on problematic directories
-    found_file=$(timeout 30 sudo -n -u "$username" bash -c "find -L '$scratchdir' -type f -newermt '$START_DATE' ! -newermt '$END_DATE 23:59:59' \
-                  -print -quit 2>/dev/null" 2>&1)
-    sudo_exit=$?
+    # Run as installer user (has read access) rather than impersonating with sudo
+    # Timeout after 3 seconds to prevent hanging on problematic directories
+    found_file=$(timeout 3 find -L "$scratchdir" -type f -newermt "$START_DATE" ! -newermt "$END_DATE 23:59:59" \
+                  -print -quit 2>/dev/null)
+    find_exit=$?
     
     # If we got a file path, user is active (even if exit code is 1 from -quit)
     if [ ! -z "$found_file" ]; then
@@ -174,22 +174,22 @@ for scratchdir in /scratch/*; do
         timestamp=$(date -d "$END_DATE" +%s)
         active_users[$username]="scratch"
         update_last_activity "$username" "$timestamp"
-    elif [ $sudo_exit -eq 124 ]; then
+    elif [ $find_exit -eq 124 ]; then
         # Timeout - directory too large or hung filesystem
         [ $DEBUG -eq 1 ] && echo "   DEBUG: User $username timed out (directory too large or NFS issue)"
         ((password_required++))
         scratch_password_required_users+=("$username (timeout)")
-    elif [ $sudo_exit -ne 0 ]; then
-        # No output but non-zero exit = actual error (permission denied, etc)
+    elif [ $find_exit -ne 0 ] && [ $find_exit -ne 1 ]; then
+        # Other error (not timeout, not normal -quit exit)
         ((password_required++))
         scratch_password_required_users+=("$username")
-        [ $DEBUG -eq 1 ] && echo "   DEBUG: User $username failed with exit code $sudo_exit (no sudo access or other error)"
+        [ $DEBUG -eq 1 ] && echo "   DEBUG: User $username failed with exit code $find_exit"
     fi
-    # If no file and exit 0 = user just not active in this period (normal)
+    # If no file and exit 0 or 1 = user just not active in this period (normal)
 done
-echo "   Checked: $checked, Skipped: $skipped already active, Password-required: $password_required"
+echo "   Checked: $checked, Skipped: $skipped already active, Errors/Timeouts: $password_required"
 if [ ${#scratch_password_required_users[@]} -gt 0 ]; then
-    echo "   First 10 users with sudo errors (run with DEBUG=1 for details):"
+    echo "   First 10 users with errors/timeouts (run with DEBUG=1 for details):"
     printf '   %s\n' "${scratch_password_required_users[@]}" | head -10
 fi
 
@@ -203,7 +203,7 @@ if [ ${#password_required_users[@]} -gt 0 ] || [ ${#scratch_password_required_us
     > /tmp/spydur_password_required_users.txt
     printf '%s\n' "${password_required_users[@]}" "${scratch_password_required_users[@]}" | sort -u > /tmp/spydur_password_required_users.txt
     unique_count=$(wc -l < /tmp/spydur_password_required_users.txt)
-    echo "Users with sudo errors: $unique_count (saved to /tmp/spydur_password_required_users.txt)"
+    echo "Users with errors/timeouts: $unique_count (saved to /tmp/spydur_password_required_users.txt)"
     echo "Run with DEBUG=1 to see error details"
     echo ""
 fi
